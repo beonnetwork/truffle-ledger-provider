@@ -1,33 +1,37 @@
 const Web3 = require('web3')
-const TransportU2F = require('@ledgerhq/hw-transport-node-hid').default
+const TransportNodeHid = require('@ledgerhq/hw-transport-node-hid').default
 const ProviderEngine = require('web3-provider-engine')
 const ProviderSubprovider = require('web3-provider-engine/subproviders/provider.js')
 const FiltersSubprovider = require('web3-provider-engine/subproviders/filters.js')
 const createLedgerSubprovider = require('@ledgerhq/web3-subprovider').default
 
+let engine;
+const getEngine = (options, url) => {
+  if (engine) {
+    return engine;
+  }
+  engine = new ProviderEngine();
+  const ledgerSubprovider = createLedgerSubprovider(() => {
+    return TransportNodeHid.create();
+  }, options);
+  engine.addProvider(ledgerSubprovider);
+  engine.addProvider(new FiltersSubprovider());
+  engine.addProvider(new ProviderSubprovider(new Web3.providers.HttpProvider(url)));
+  engine.start();
+  return engine;
+}
 
 class LedgerProvider {
   constructor(options, url) {
-    const getTransport = () => TransportU2F.create()
-    const ledger = createLedgerSubprovider(getTransport, options)
-
-    this.engine = new ProviderEngine()
-    this.engine.addProvider(ledger)
-    this.engine.addProvider(new FiltersSubprovider())
-    this.engine.addProvider(new ProviderSubprovider(new Web3.providers.HttpProvider(url)))
-    this.engine.start()
+    this.engine = getEngine(options, url);
   }
 
-  sendAsync(...args) {
-    this.engine.sendAsync.apply(this.engine, ...args)
+  sendAsync() {
+    return this.engine.sendAsync.apply(this.engine, arguments);
   }
 
-  send(...args) {
-    return this.engine.send.apply(this.engine, ...args)
-  }
-
-  getAddress() {
-    return this.address
+  send() {
+    return this.engine.send.apply(this.engine, arguments);
   }
 }
 
